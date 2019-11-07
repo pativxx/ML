@@ -1,0 +1,409 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "myfirstNN.ipynb",
+      "provenance": [],
+      "collapsed_sections": [],
+      "toc_visible": true
+    },
+    "kernelspec": {
+      "name": "python2",
+      "display_name": "Python 2"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "xArtrwzJ8NyN",
+        "colab_type": "text"
+      },
+      "source": [
+        "This is a very simple example of neural network. Its purpose is to approximate an unknown single valued function using a dense deep network. \n",
+        "The user is invited to play with it, modifying:\n",
+        "1. the hidden function\n",
+        "2. the number of layers and neurons per layer\n",
+        "3. activation functions, number of epochs, and so on."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "2oAc-WyJ6bsl",
+        "colab_type": "code",
+        "outputId": "db6c1efc-0a32-48a0-985d-5acab32436b2",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 97
+        }
+      },
+      "source": [
+        "from keras.layers import Input, Dense\n",
+        "from keras.models import Model\n",
+        "import numpy as np\n",
+        "import matplotlib.pyplot as plt"
+      ],
+      "execution_count": 1,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Using TensorFlow backend.\n"
+          ],
+          "name": "stderr"
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "<p style=\"color: red;\">\n",
+              "The default version of TensorFlow in Colab will soon switch to TensorFlow 2.x.<br>\n",
+              "We recommend you <a href=\"https://www.tensorflow.org/guide/migrate\" target=\"_blank\">upgrade</a> now \n",
+              "or ensure your notebook will continue to use TensorFlow 1.x via the <code>%tensorflow_version 1.x</code> magic:\n",
+              "<a href=\"https://colab.research.google.com/notebooks/tensorflow_version.ipynb\" target=\"_blank\">more info</a>.</p>\n"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "XKTYzmUP9vB-",
+        "colab_type": "text"
+      },
+      "source": [
+        "\"myhiddenfunction\" is the definition of the function you want to approximate by means of a neural network (NN). The definition is hidden to the NN, who can only access it as a blackbox, to get training samples. \n",
+        "This is implemented by means of a generator (a special kind of function), taking in input a number (batchsize) and returning a pair of input output vectors of length batchsize. Each input is a random number in the interval [-pi,pi] and the output is computed by means of myhiddenfunction."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Xf4J4vaG7i1d",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def myhiddenfunction(x):\n",
+        "  #define your favourite function\n",
+        "  #output in range 0-1 if last activation is a sigmoid!\n",
+        "  return (np.sin(x)**2 + np.cos(x)/3 + 1)/3\n",
+        "  \n",
+        "def generator(batchsize):\n",
+        "    while True:\n",
+        "      inputs = np.random.uniform(low=-np.pi,high=np.pi,size=batchsize)\n",
+        "      outputs = np.zeros(batchsize)\n",
+        "      for i in range(0,batchsize):\n",
+        "          outputs[i] = myhiddenfunction(inputs[i])\n",
+        "      yield (inputs,outputs)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "IOhXjNKJAhbH",
+        "colab_type": "text"
+      },
+      "source": [
+        "If you want to see an example of a generated batch, you need to invoke next on the generator"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "_R6lAy5BBCoe",
+        "colab_type": "code",
+        "outputId": "48a5d2de-6062-4dfb-8ccb-8e41d523aa84",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 34
+        }
+      },
+      "source": [
+        "print(next(generator(1)))"
+      ],
+      "execution_count": 3,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "(array([0.46434913]), array([0.49953309]))\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "SU8FuW0awBa_",
+        "colab_type": "text"
+      },
+      "source": [
+        "Alternatively, instead of using a generator you can define a fixed training set."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "EWviQHzBwNuU",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "X = np.random.uniform(low=-np.pi,high=np.pi,size=1000)\n",
+        "Y = np.zeros(1000)\n",
+        "for i in range(0,1000):\n",
+        "   Y[i] = myhiddenfunction(X[i])"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "RzW03FAiBicW",
+        "colab_type": "text"
+      },
+      "source": [
+        "Now we define the network. The function we want to approximate is single valued, so the network will have a single input and a single output, and its (dense) structure is completely defined by a \n",
+        "list specifying the number of neurons per layer\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "yk8gF-HzDayv",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "# size of hidden layers (one for each of them)\n",
+        "inner_layers_dims = [30,30,20]\n",
+        "\n",
+        "input_layer = Input(shape=(1,))\n",
+        "x = input_layer\n",
+        "for i in range(0,len(inner_layers_dims)):\n",
+        "  x = Dense(inner_layers_dims[i], activation='relu')(x)\n",
+        "output_layer = Dense(1, activation='relu')(x)\n",
+        "\n",
+        "mymodel = Model(input_layer,output_layer)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "sruNt7tJD_uW",
+        "colab_type": "text"
+      },
+      "source": [
+        "We can now have a look at the model we just generated:"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "vycSPvkZEJ2Q",
+        "colab_type": "code",
+        "outputId": "33e84d8f-1750-433c-e70b-444e75c2327d",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 306
+        }
+      },
+      "source": [
+        "mymodel.summary()"
+      ],
+      "execution_count": 21,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "_________________________________________________________________\n",
+            "Layer (type)                 Output Shape              Param #   \n",
+            "=================================================================\n",
+            "input_2 (InputLayer)         (None, 1)                 0         \n",
+            "_________________________________________________________________\n",
+            "dense_5 (Dense)              (None, 40)                80        \n",
+            "_________________________________________________________________\n",
+            "dense_6 (Dense)              (None, 30)                1230      \n",
+            "_________________________________________________________________\n",
+            "dense_7 (Dense)              (None, 20)                620       \n",
+            "_________________________________________________________________\n",
+            "dense_8 (Dense)              (None, 1)                 21        \n",
+            "=================================================================\n",
+            "Total params: 1,951\n",
+            "Trainable params: 1,951\n",
+            "Non-trainable params: 0\n",
+            "_________________________________________________________________\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gXRWtOJsEPj-",
+        "colab_type": "text"
+      },
+      "source": [
+        "Try to be sure you correctly understand the number of learning parameters for each layer. \n",
+        "For a dense layer with n input neurons and m output neurons, your have n*m weights + m biases.\n",
+        "For instance, for a 20-to-30 layer, we have 20*30+30 = 630 parameters."
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "qIuE_GgiGBS7",
+        "colab_type": "text"
+      },
+      "source": [
+        "We are finally ready to compile our model and train it.\n",
+        "As loss function we use mean square error (mse). \n",
+        "The \"optimizer\" is the technique used to tune the learning rate during backpropagation: you may ignore it for the moment."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "gfjFQg6QFy8O",
+        "colab_type": "code",
+        "outputId": "655c8bec-ea88-41b0-c00f-4307866c79a0",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 374
+        }
+      },
+      "source": [
+        "mymodel.compile(optimizer='adam', loss='mse')\n",
+        "\n",
+        "batchsize = 256\n",
+        "\n",
+        "#use fit_generator to use the generator\n",
+        "mymodel.fit_generator(generator(batchsize), steps_per_epoch=1000, epochs=10)\n",
+        "\n",
+        "#use fit to wotk with the fixed training set\n",
+        "#mymodel.fit(X,Y,batch_size=batchsize,epochs=1000)"
+      ],
+      "execution_count": 28,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 1/10\n",
+            "1000/1000 [==============================] - 5s 5ms/step - loss: 6.6463e-06\n",
+            "Epoch 2/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.0706e-06\n",
+            "Epoch 3/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.2459e-06\n",
+            "Epoch 4/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.1152e-06\n",
+            "Epoch 5/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.0692e-06\n",
+            "Epoch 6/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.3748e-06\n",
+            "Epoch 7/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.4003e-06\n",
+            "Epoch 8/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 3.3533e-06\n",
+            "Epoch 9/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 2.3846e-06\n",
+            "Epoch 10/10\n",
+            "1000/1000 [==============================] - 4s 4ms/step - loss: 2.4867e-06\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<keras.callbacks.History at 0x7f9b592dcf10>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 28
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gQJx-p0zHxWl",
+        "colab_type": "text"
+      },
+      "source": [
+        "If everything is working correctly, the loss should decrease during training.  \n",
+        "If it doesn't, it means that, for some reason, the network is not learning.\n",
+        "\n",
+        "We are finally ready to check the result of the approximation. We plot the hidden function in red, \n",
+        "and the approximation computed by the network in blu."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "LquGdgn0INmX",
+        "colab_type": "code",
+        "outputId": "4fadb0d5-1af1-4b9e-cefc-cac20f4ec73a",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 270
+        }
+      },
+      "source": [
+        "x = np.arange(-np.pi,np.pi,0.05)\n",
+        "y = [myhiddenfunction(a) for a in x]\n",
+        "z = [z[0] for z in mymodel.predict(np.array(x))]\n",
+        "plt.plot(x,y,'r',x,z,'b')\n",
+        "plt.show()\n"
+      ],
+      "execution_count": 27,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "image/png": "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\n",
+            "text/plain": [
+              "<Figure size 432x288 with 1 Axes>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "2DOwrXfyI45P",
+        "colab_type": "text"
+      },
+      "source": [
+        "Now is your turn. Modify:\n",
+        "\n",
+        "1. the definition of the hidden function\n",
+        "2. the number of layers/neurons per layer; you just have to change inner_layers_dims in block 6.\n",
+        "\n",
+        "Have fun."
+      ]
+    }
+  ]
+}
